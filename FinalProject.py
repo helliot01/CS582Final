@@ -16,6 +16,22 @@ def generate_curve(num_bits,height):
     hilberts = np.arange(max_h)
     # Compute the 2-dimensional locations.
     locs = decode(hilberts, num_dims, num_bits)
+
+    quarter = int(len(locs)/4)
+    middle = locs[quarter:(3*quarter)]
+
+    locs = np.asarray(locs)
+    idx = np.unravel_index(np.argmax(locs), locs.shape)
+
+    locs = np.asarray(middle)
+    flipped = locs.copy()
+    for r in range(len(flipped)):
+        flipped[r][1] = (flipped[r][1] * -1) + locs[idx]
+    firstq = np.asarray(flipped[:quarter])
+    lastq = np.asarray(flipped[quarter:])
+    locs = np.concatenate((flipped,middle[::-1]))
+    # print(locs[0], locs[-1])
+
     vertices = []
     for entry in locs: 
         vertices.append([entry[0],entry[1], height])
@@ -30,13 +46,16 @@ def draw_curve(locs, ax, num_bits):
     ax.set_ylabel('dim 2')
 
 
-def generate_basic_mesh():
-    v0 = generate_curve(2,0)
-    v1 = generate_curve(2,1)
+def generate_basic_mesh(order):
+    v0 = generate_curve(order,0) ##generate hilbert curves here for each slice
+    v1 = generate_curve(order,1)
+
     slices = 2
     num_vertices = len(v0)
-    vertices = np.asarray(v0 + v1)
+    vertices = np.asarray(v0 + v1) #append all slices to one list of vertices for the stl generation
 
+    print(vertices)
+    
     faces = triangulate(slices, num_vertices)
 
     cube = mesh.Mesh(np.zeros(faces.shape[0], dtype=mesh.Mesh.dtype))
@@ -53,9 +72,11 @@ def triangulate(slices, num_vertices):
         while(i<num_vertices-1):
             curr_ind = x*num_vertices + i
             above_ind = (x+1)*num_vertices + i
-            f.append([curr_ind, curr_ind+1, above_ind])
+            f.append([curr_ind, above_ind, curr_ind+1])
             f.append([above_ind, above_ind+1, curr_ind+1])
             i+=1
+        f.append([x*num_vertices,(x+1)*num_vertices, (x+1)*num_vertices-1])
+        f.append([(x+1)*num_vertices, (x+1)*num_vertices-1, (x+1)*num_vertices+i])
     faces = np.asarray(f)
     return faces
 
@@ -74,7 +95,7 @@ def plot_stl(your_mesh):
 
 
 
-generate_basic_mesh()
+generate_basic_mesh(3)
 # Load the STL files and plot
 your_mesh = mesh.Mesh.from_file('cube.stl')
 plot_stl(your_mesh)
