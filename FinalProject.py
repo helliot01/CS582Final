@@ -5,6 +5,10 @@ from hilbert import decode
 
 from mpl_toolkits import mplot3d
 from matplotlib import pyplot
+import cubic_hermit as ch
+
+FD = ch.TCubicHermiteSpline.FINITE_DIFF
+GRAD = ch.TCubicHermiteSpline.GRAD
 
 
 num_dims = 2
@@ -49,12 +53,22 @@ def draw_curve(locs, ax, num_bits):
 def generate_basic_mesh(order):
     v0 = generate_curve(order,0) ##generate hilbert curves here for each slice
     v1 = generate_curve(order,1)
+    v2 = generate_curve(order,2)
 
-    slices = 2
-    num_vertices = len(v0)
-    vertices = np.asarray(v0 + v1) #append all slices to one list of vertices for the stl generation
+    slices = 3
+    vertices = np.asarray(v0 + v1 + v2) #append all slices to one list of vertices for the stl generation
 
-    print(vertices)
+    chs_finite = ch.TCubicHermiteSpline()
+    vertex_time = np.arange(len(v0)) # integer time steps per control point
+    spaced_time = np.linspace(0,len(v0) - 1 ,10 * len(v0)) # smaller time steps for evaluation K 2 - n-1
+
+    int_v0 = interpolate(chs_finite, vertex_time, spaced_time, v0)
+    int_v1 = interpolate(chs_finite, vertex_time, spaced_time, v1)
+    int_v2 = interpolate(chs_finite, vertex_time, spaced_time, v2)
+
+    assert int_v0.shape[0] == (int_v1).shape[0] == int_v2.shape[0]
+    num_vertices = int_v0.shape[0]
+    vertices = np.concatenate((int_v0,int_v1,int_v2),axis=0)
     
     faces = triangulate(slices, num_vertices)
 
@@ -79,6 +93,18 @@ def triangulate(slices, num_vertices):
         f.append([(x+1)*num_vertices, (x+1)*num_vertices-1, (x+1)*num_vertices+i])
     faces = np.asarray(f)
     return faces
+
+def interpolate(chs_finite, vertex_time, spaced_time, vertices):
+    v1_np = np.array(vertices)
+    t_v1 = np.array([( t, X) for t, X in zip(vertex_time, v1_np) ],dtype= object)
+    chs_finite.Initialize(t_v1,tan_method=FD, end_tan = GRAD)
+
+    int_v1 = np.zeros( shape=[spaced_time.size,3],dtype=float)
+
+    for idx in range(spaced_time.size):
+        int_v1[idx] = chs_finite.Evaluate(spaced_time[idx])
+    return int_v1
+
 
 def plot_stl(your_mesh):
     figure = pyplot.figure()
