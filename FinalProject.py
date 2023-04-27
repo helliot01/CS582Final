@@ -5,7 +5,10 @@ from hilbert import decode
 
 from mpl_toolkits import mplot3d
 from matplotlib import pyplot
+import cubic_hermit as ch
 
+FD = ch.TCubicHermiteSpline.FINITE_DIFF
+GRAD = ch.TCubicHermiteSpline.GRAD
 
 num_dims = 2
 def generate_curve(num_bits,height):
@@ -14,24 +17,10 @@ def generate_curve(num_bits,height):
 
     # Generate a sequence of Hilbert integers.
     hilberts = np.arange(max_h)
+
     # Compute the 2-dimensional locations.
     locs = decode(hilberts, num_dims, num_bits)
-
-    quarter = int(len(locs)/4)
-    middle = locs[quarter:(3*quarter)]
-
-    locs = np.asarray(locs)
-    idx = np.unravel_index(np.argmax(locs), locs.shape)
-
-    locs = np.asarray(middle)
-    flipped = locs.copy()
-    for r in range(len(flipped)):
-        flipped[r][1] = (flipped[r][1] * -1) + locs[idx]
-    firstq = np.asarray(flipped[:quarter])
-    lastq = np.asarray(flipped[quarter:])
-    locs = np.concatenate((flipped,middle[::-1]))
-    # print(locs[0], locs[-1])
-
+    print()
     vertices = []
     for entry in locs: 
         vertices.append([entry[0],entry[1], height])
@@ -46,16 +35,50 @@ def draw_curve(locs, ax, num_bits):
     ax.set_ylabel('dim 2')
 
 
-def generate_basic_mesh(order):
-    v0 = generate_curve(order,0) ##generate hilbert curves here for each slice
-    v1 = generate_curve(order,1)
+def generate_basic_mesh():
+    v0 = generate_curve(2,0)
+    v1 = generate_curve(2,1)
+    chs_finite = ch.TCubicHermiteSpline()
+    vertex_time = np.arange(len(v0)) # integer time steps per control point
+    spaced_time = np.linspace(0,len(v0) - 1 ,10 * len(v0)) # smaller time steps for evaluation K 2 - n-1
+    v0_np = np.array(v0)
+    t_v0 = np.array([( t, X) for t, X in zip(vertex_time, v0_np) ],dtype= object)
+    chs_finite.Initialize(t_v0,tan_method=FD, end_tan = GRAD) 
+    #print('first', v0_np[0])
+    int_v0 = np.empty((1,3))
+
+
+    print(spaced_time) 
+    for idx in range(spaced_time.size):
+        #print('shape per i',chs_finite.Evaluate(spaced_time[idx]))
+        int_v0 = np.vstack((int_v0, chs_finite.Evaluate(spaced_time[idx]).reshape(1,3)) )
+    print('layer0: \n',int_v0)
+    print('layer0 shape: \n',int_v0.shape)
+
+    chs_finite = ch.TCubicHermiteSpline()
+    vertex_time = np.arange(len(v1)) # integer time steps per control point
+    spaced_time = np.linspace(0,len(v1) - 1 ,10 * len(v1)) # smaller time steps for evaluation K 2 - n-1
+    v1_np = np.array(v1)
+    t_v1 = np.array([( t, X) for t, X in zip(vertex_time, v1_np) ],dtype= object)
+    chs_finite.Initialize(t_v1,tan_method=FD, end_tan = GRAD) 
+
+    int_v1 = np.empty((1,3))
+    #print(spaced_time) 
+    for idx in range(spaced_time.size):
+        #print(chs_finite.Evaluate(spaced_time[idx]))
+        int_v1 = np.vstack((int_v1, chs_finite.Evaluate(spaced_time[idx]).reshape(1,3)) )
+    #int_v0 = np.array([v0[-1]]);
+    print('layer1: \n',int_v1)
 
     slices = 2
-    num_vertices = len(v0)
-    vertices = np.asarray(v0 + v1) #append all slices to one list of vertices for the stl generation
+    #num_vertices = len(v0)
+    #vertices = np.asarray(v0 + v1)
+    assert int_v0.shape[0] == (int_v1).shape[0]
+    print('layer shape', int_v0.shape)
+    num_vertices = int_v0.shape[0]
+    vertices = np.concatenate((int_v0,int_v1),axis=0)
+    print('concatenated shape: ', vertices.shape)
 
-    print(vertices)
-    
     faces = triangulate(slices, num_vertices)
 
     cube = mesh.Mesh(np.zeros(faces.shape[0], dtype=mesh.Mesh.dtype))
@@ -72,11 +95,9 @@ def triangulate(slices, num_vertices):
         while(i<num_vertices-1):
             curr_ind = x*num_vertices + i
             above_ind = (x+1)*num_vertices + i
-            f.append([curr_ind, above_ind, curr_ind+1])
+            f.append([curr_ind, curr_ind+1, above_ind])
             f.append([above_ind, above_ind+1, curr_ind+1])
             i+=1
-        f.append([x*num_vertices,(x+1)*num_vertices, (x+1)*num_vertices-1])
-        f.append([(x+1)*num_vertices, (x+1)*num_vertices-1, (x+1)*num_vertices+i])
     faces = np.asarray(f)
     return faces
 
@@ -95,7 +116,7 @@ def plot_stl(your_mesh):
 
 
 
-generate_basic_mesh(3)
+generate_basic_mesh()
 # Load the STL files and plot
 your_mesh = mesh.Mesh.from_file('cube.stl')
 plot_stl(your_mesh)
