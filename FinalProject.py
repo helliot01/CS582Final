@@ -36,8 +36,8 @@ def draw_curve(locs, ax, num_bits):
 
 
 def generate_basic_mesh():
-    v0 = generate_curve(2,0)
-    v1 = generate_curve(2,1)
+    v0 = generate_curve(3,0)
+    v1 = generate_curve(3,1)
     chs_finite = ch.TCubicHermiteSpline()
     vertex_time = np.arange(len(v0)) # integer time steps per control point
     spaced_time = np.linspace(0,len(v0) - 1 ,10 * len(v0)) # smaller time steps for evaluation K 2 - n-1
@@ -45,13 +45,15 @@ def generate_basic_mesh():
     t_v0 = np.array([( t, X) for t, X in zip(vertex_time, v0_np) ],dtype= object)
     chs_finite.Initialize(t_v0,tan_method=FD, end_tan = GRAD) 
     #print('first', v0_np[0])
-    int_v0 = np.empty((1,3))
+    int_v0 = np.zeros( shape=[spaced_time.size,3],dtype=float)
+    print('v0 init ',int_v0)
 
 
     print(spaced_time) 
     for idx in range(spaced_time.size):
         #print('shape per i',chs_finite.Evaluate(spaced_time[idx]))
-        int_v0 = np.vstack((int_v0, chs_finite.Evaluate(spaced_time[idx]).reshape(1,3)) )
+        int_v0[idx] = chs_finite.Evaluate(spaced_time[idx])
+        #int_v0 = np.vstack((int_v0, chs_finite.Evaluate(spaced_time[idx]).reshape(1,3)) )
     print('layer0: \n',int_v0)
     print('layer0 shape: \n',int_v0.shape)
 
@@ -62,11 +64,13 @@ def generate_basic_mesh():
     t_v1 = np.array([( t, X) for t, X in zip(vertex_time, v1_np) ],dtype= object)
     chs_finite.Initialize(t_v1,tan_method=FD, end_tan = GRAD) 
 
-    int_v1 = np.empty((1,3))
+    int_v1 = np.zeros( shape=[spaced_time.size,3],dtype=float)
+
+    print('v1 init ',int_v1)
     #print(spaced_time) 
     for idx in range(spaced_time.size):
         #print(chs_finite.Evaluate(spaced_time[idx]))
-        int_v1 = np.vstack((int_v1, chs_finite.Evaluate(spaced_time[idx]).reshape(1,3)) )
+        int_v1[idx] = chs_finite.Evaluate(spaced_time[idx])
     #int_v0 = np.array([v0[-1]]);
     print('layer1: \n',int_v1)
 

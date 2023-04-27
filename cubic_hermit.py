@@ -97,7 +97,7 @@ class TCubicHermiteSpline:
     else:        self.Param.C= c
     if m==None:  c= self.Param.M
     else:        self.Param.M= m
-    print('type and shape of X0', type(self.KeyPts[0].X), self.KeyPts[0].X.size)
+    #print('type and shape of X0', type(self.KeyPts[0].X), self.KeyPts[0].X.size)
 
     grad= lambda idx1,idx2: (self.KeyPts[idx2].X-self.KeyPts[idx1].X)/(self.KeyPts[idx2].Time-self.KeyPts[idx1].Time)
 
