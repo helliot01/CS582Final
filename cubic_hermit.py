@@ -131,5 +131,3 @@ class TCubicHermiteSpline:
 
   def Update(self):
     self.Initialize(data=None, tan_method=None, end_tan=None, c=None, m=None)
-
-

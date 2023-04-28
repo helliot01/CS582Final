@@ -7,6 +7,7 @@ from mpl_toolkits import mplot3d
 from matplotlib import pyplot
 import cubic_hermit as ch
 
+
 FD = ch.TCubicHermiteSpline.FINITE_DIFF
 GRAD = ch.TCubicHermiteSpline.GRAD
 
@@ -35,54 +36,26 @@ def draw_curve(locs, ax, num_bits):
     ax.set_ylabel('dim 2')
 
 
-def generate_basic_mesh():
-    v0 = generate_curve(3,0)
-    v1 = generate_curve(3,1)
+def generate_basic_mesh(order):
+    v0 = generate_curve(order,0) ##generate hilbert curves here for each slice
+    v1 = generate_curve(order,1)
+    v2 = generate_curve(order,2)
+
+    slices = 3
+    vertices = np.asarray(v0 + v1 + v2) #append all slices to one list of vertices for the stl generation
+
     chs_finite = ch.TCubicHermiteSpline()
     vertex_time = np.arange(len(v0)) # integer time steps per control point
     spaced_time = np.linspace(0,len(v0) - 1 ,10 * len(v0)) # smaller time steps for evaluation K 2 - n-1
-    v0_np = np.array(v0)
-    t_v0 = np.array([( t, X) for t, X in zip(vertex_time, v0_np) ],dtype= object)
-    chs_finite.Initialize(t_v0,tan_method=FD, end_tan = GRAD) 
-    #print('first', v0_np[0])
-    int_v0 = np.zeros( shape=[spaced_time.size,3],dtype=float)
-    print('v0 init ',int_v0)
 
+    int_v0 = interpolate(chs_finite, vertex_time, spaced_time, v0)
+    int_v1 = interpolate(chs_finite, vertex_time, spaced_time, v1)
+    int_v2 = interpolate(chs_finite, vertex_time, spaced_time, v2)
 
-    print(spaced_time) 
-    for idx in range(spaced_time.size):
-        #print('shape per i',chs_finite.Evaluate(spaced_time[idx]))
-        int_v0[idx] = chs_finite.Evaluate(spaced_time[idx])
-        #int_v0 = np.vstack((int_v0, chs_finite.Evaluate(spaced_time[idx]).reshape(1,3)) )
-    print('layer0: \n',int_v0)
-    print('layer0 shape: \n',int_v0.shape)
-
-    chs_finite = ch.TCubicHermiteSpline()
-    vertex_time = np.arange(len(v1)) # integer time steps per control point
-    spaced_time = np.linspace(0,len(v1) - 1 ,10 * len(v1)) # smaller time steps for evaluation K 2 - n-1
-    v1_np = np.array(v1)
-    t_v1 = np.array([( t, X) for t, X in zip(vertex_time, v1_np) ],dtype= object)
-    chs_finite.Initialize(t_v1,tan_method=FD, end_tan = GRAD) 
-
-    int_v1 = np.zeros( shape=[spaced_time.size,3],dtype=float)
-
-    print('v1 init ',int_v1)
-    #print(spaced_time) 
-    for idx in range(spaced_time.size):
-        #print(chs_finite.Evaluate(spaced_time[idx]))
-        int_v1[idx] = chs_finite.Evaluate(spaced_time[idx])
-    #int_v0 = np.array([v0[-1]]);
-    print('layer1: \n',int_v1)
-
-    slices = 2
-    #num_vertices = len(v0)
-    #vertices = np.asarray(v0 + v1)
-    assert int_v0.shape[0] == (int_v1).shape[0]
-    print('layer shape', int_v0.shape)
+    assert int_v0.shape[0] == (int_v1).shape[0] == int_v2.shape[0]
     num_vertices = int_v0.shape[0]
-    vertices = np.concatenate((int_v0,int_v1),axis=0)
-    print('concatenated shape: ', vertices.shape)
-
+    vertices = np.concatenate((int_v0,int_v1,int_v2),axis=0)
+    
     faces = triangulate(slices, num_vertices)
 
     cube = mesh.Mesh(np.zeros(faces.shape[0], dtype=mesh.Mesh.dtype))
@@ -104,6 +77,18 @@ def triangulate(slices, num_vertices):
             i+=1
     faces = np.asarray(f)
     return faces
+
+def interpolate(chs_finite, vertex_time, spaced_time, vertices):
+    v1_np = np.array(vertices)
+    t_v1 = np.array([( t, X) for t, X in zip(vertex_time, v1_np) ],dtype= object)
+    chs_finite.Initialize(t_v1,tan_method=FD, end_tan = GRAD)
+
+    int_v1 = np.zeros( shape=[spaced_time.size,3],dtype=float)
+
+    for idx in range(spaced_time.size):
+        int_v1[idx] = chs_finite.Evaluate(spaced_time[idx])
+    return int_v1
+
 
 def plot_stl(your_mesh):
     figure = pyplot.figure()
