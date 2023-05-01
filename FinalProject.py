@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 from stl import mesh
 from hilbert import decode
 
+import argparse
+
 from mpl_toolkits import mplot3d
 from matplotlib import pyplot
 import cubic_hermit as ch
@@ -10,8 +12,49 @@ import cubic_hermit as ch
 
 FD = ch.TCubicHermiteSpline.FINITE_DIFF
 GRAD = ch.TCubicHermiteSpline.GRAD
-
+TRI_VERT = 3
 num_dims = 2
+
+
+def parse_arg():
+    parser = argparse.ArgumentParser(description='Train a detector')
+    parser.add_argument('--mode',
+                        type=str,
+                        default='create',
+                        help='create for control points , interpolation for interpolation')
+    parser.add_argument('--order',
+                        type=int,
+                        default= None,
+                        help='num of hilbert curve bits')
+    parser.add_argument('--layers',
+                        type=int,
+                        default= None,
+                        help='num of layers')
+    parser.add_argument('--control_stl',
+                        type=str,
+                        default= None,
+                        help='control stl for interpolation input')
+    parser.add_argument('--resolution',
+                        type=int,
+                        default= None,
+                        help='interpolation resolution')
+
+    parser.add_argument(
+        '--Ipath',
+        default=None,
+        help='input path')
+
+    parser.add_argument(
+        '--Opath',
+        default=None,
+        help='output path')
+
+    args = parser.parse_args()
+
+    return args
+
+
+
 def generate_curve(num_bits,height):
     # The maximum Hilbert integer.
     max_h = 2**(num_bits*num_dims)
@@ -35,48 +78,67 @@ def draw_curve(locs, ax, num_bits):
     ax.set_xlabel('dim 1')
     ax.set_ylabel('dim 2')
 
+def triangulation(slices, num_vertices):
+    return [(i, i+1, i+num_vertices) for i in range(1, num_vertices * slices, num_vertices)]
 
-def generate_basic_mesh(order):
-    v0 = generate_curve(order,0) ##generate hilbert curves here for each slice
-    v1 = generate_curve(order,1)
-    v2 = generate_curve(order,2)
+def generate_basic_mesh(order : int,slices :int, path = 'control_cube.obj'):
+        v0 = generate_curve(order,0) ##generate hilbert curves here for each slice
+        vertices = np.asarray(v0)
+        for i in range(1,slices):
+            vertices = np.concatenate((vertices, np.asarray(generate_curve(order,i))), axis=0)
+        vertices[:,0] = vertices[:,0] - 1 
+        print('np',vertices)
+        print('np',vertices.shape)
+        num_vertices = int(vertices.shape[0] / slices)
 
-    slices = 3
-    vertices = np.asarray(v0 + v1 + v2) #append all slices to one list of vertices for the stl generation
+        faces = triangulate(slices, num_vertices)
+        faces = faces + 1
+        print('faces',faces)
+        #faces = triangulation(slices, num_vertices)
+        with open(path, 'w') as file:
+            for vertex in vertices:
+                file.write(f"v {vertex[0]} {vertex[1]} {vertex[2]}\n")
 
-    chs_finite = ch.TCubicHermiteSpline()
-    vertex_time = np.arange(len(v0)) # integer time steps per control point
-    spaced_time = np.linspace(0,len(v0) - 1 ,10 * len(v0)) # smaller time steps for evaluation K 2 - n-1
+            # Write faces
+            for face in faces:
+                file.write(f"f {face[0]} {face[1]} {face[2]}\n") 
+           
 
-    int_v0 = interpolate(chs_finite, vertex_time, spaced_time, v0)
-    int_v1 = interpolate(chs_finite, vertex_time, spaced_time, v1)
-    int_v2 = interpolate(chs_finite, vertex_time, spaced_time, v2)
+        #cube = mesh.Mesh(np.zeros(faces.shape[0], dtype=mesh.Mesh.dtype))
+        #cube.vertices = vertices
+        #for i, f in enumerate(faces):
+        #    for j in range(TRI_VERT):
+        #        cube.vectors[i][j] = vertices[f[j],:]
+        #cube.save(path)
 
-    assert int_v0.shape[0] == (int_v1).shape[0] == int_v2.shape[0]
-    num_vertices = int_v0.shape[0]
-    vertices = np.concatenate((int_v0,int_v1,int_v2),axis=0)
+def interpolate_basic_mesh(vertices, resolution, slices, path = 'interpolated_cube.stl'):
+    int_vertices = np.zeros(shape=(resolution * vertices.shape[0],3))#solution
+    num_vertices = int(vertices.shape[0] / slices) #number of vertices per layer before interpolation
+
+    for i in range(slices):
+        layer = vertices[(i*num_vertices) : (i+1)*num_vertices]
+        chs_finite = ch.TCubicHermiteSpline()
+        vertex_time = np.arange(layer.shape[0]) # integer time steps per control point
+        spaced_time = np.linspace(0,layer.shape[0] - 1 ,resolution * layer.shape[0])
+        int_layer = interpolate(chs_finite, vertex_time, spaced_time, layer)
+        print(int_layer.shape)
+        int_vertices[i*num_vertices * resolution: (i+1)* num_vertices *resolution ,:] = int_layer
+        #int_vertices = np.concatenate((int_vertices , int_layer),axis=0)
+
+
+    print(int_vertices.shape)
+    #vertices = vertices.squeeze(axis=0)
+
+    int_num_vertices = int(int_vertices.shape[0] / slices)
     
-    faces = triangulate(slices, num_vertices)
+    #print('int vertices', vertices) 
+    faces = triangulate(slices, int_num_vertices)
 
     cube = mesh.Mesh(np.zeros(faces.shape[0], dtype=mesh.Mesh.dtype))
     for i, f in enumerate(faces):
-        for j in range(3):
-            cube.vectors[i][j] = vertices[f[j],:]
-    cube.save('cube.stl')
-
-def triangulate(slices, num_vertices):
-    f = []
-    #for every slice, take i of slice n, slice i of n+1, slice i+1 of n. slice i,i+1 of n+, slice i+1 of n
-    for x in range(slices-1):
-        i=0
-        while(i<num_vertices-1):
-            curr_ind = x*num_vertices + i
-            above_ind = (x+1)*num_vertices + i
-            f.append([curr_ind, curr_ind+1, above_ind])
-            f.append([above_ind, above_ind+1, curr_ind+1])
-            i+=1
-    faces = np.asarray(f)
-    return faces
+        for j in range(TRI_VERT):
+            cube.vectors[i][j] = int_vertices[f[j],:]
+    cube.save(path)
 
 def interpolate(chs_finite, vertex_time, spaced_time, vertices):
     v1_np = np.array(vertices)
@@ -88,6 +150,23 @@ def interpolate(chs_finite, vertex_time, spaced_time, vertices):
     for idx in range(spaced_time.size):
         int_v1[idx] = chs_finite.Evaluate(spaced_time[idx])
     return int_v1
+
+def triangulate(slices, num_vertices):
+    f = []
+    #for every slice, take i of slice n, slice i of n+1, slice i+1 of n. slice i,i+1 of n+, slice i+1 of n
+    for x in range(slices-1):
+        i=0
+        while(i<num_vertices-1):
+            curr_ind = x*num_vertices + i
+            above_ind = (x+1)*num_vertices + i
+            f.append([curr_ind, above_ind, curr_ind+1])
+            f.append([above_ind, above_ind+1, curr_ind+1])
+            i+=1
+        f.append([x*num_vertices,(x+1)*num_vertices, (x+1)*num_vertices-1])
+        f.append([(x+1)*num_vertices, (x+1)*num_vertices-1, (x+1)*num_vertices+i])
+    faces = np.asarray(f)
+    return faces
+
 
 
 def plot_stl(your_mesh):
@@ -103,11 +182,37 @@ def plot_stl(your_mesh):
     # Show the plot to the screen
     pyplot.show()
 
-
-
-generate_basic_mesh()
+def main():
+    args = parse_arg()
+    print('parsed', args)
+    if args.mode == 'create':
+        if(args.Opath != None):
+            generate_basic_mesh(args.order, args.layers, args.Opath)
+        else:
+            generate_basic_mesh(args.order,args.layers)
+    elif args.mode == 'interpolation':
+        if(args.Ipath != None):
+            print('interpolating')
+            #mesh_stl = .Mesh.from_file(args.Ipath)
+            #mesh_stl = mesh.Mesh.from_file(args.Ipath)
+            vertices = []
+            with open(args.Ipath, 'r') as f:
+                for line in f:
+                    if line.startswith('v'):
+                        #print('line',line)
+                        vertices.append(line.split()[1:])
+                        
+            mesh_obj = np.array(vertices, dtype=float)
+            print('imported_mesh_vertices', mesh_obj)
+            if(args.Opath!= None):
+                interpolate_basic_mesh(mesh_obj, args.resolution, args.layers, args.Opath)
+            else:
+                interpolate_basic_mesh(mesh_obj , args.resolution, args.layers)
+    
+main()
+#generate_basic_mesh(2)
 # Load the STL files and plot
-your_mesh = mesh.Mesh.from_file('cube.stl')
-plot_stl(your_mesh)
+#your_mesh = mesh.Mesh.from_file('control_cube.stl')
+#plot_stl(your_mesh)
 
 
