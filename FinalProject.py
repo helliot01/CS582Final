@@ -56,19 +56,32 @@ def parse_arg():
 
 
 def generate_curve(num_bits,height):
-    # The maximum Hilbert integer.
     max_h = 2**(num_bits*num_dims)
 
     # Generate a sequence of Hilbert integers.
     hilberts = np.arange(max_h)
-
     # Compute the 2-dimensional locations.
     locs = decode(hilberts, num_dims, num_bits)
-    print()
+
+    quarter = int(len(locs)/4)
+    middle = locs[quarter:(3*quarter)]
+
+    locs = np.asarray(locs)
+    idx = np.unravel_index(np.argmax(locs), locs.shape)
+
+    locs = np.asarray(middle)
+    flipped = locs.copy()
+    for r in range(len(flipped)):
+        flipped[r][1] = (flipped[r][1] * -1) + locs[idx]
+    firstq = np.asarray(flipped[:quarter])
+    lastq = np.asarray(flipped[quarter:])
+    locs = np.concatenate((flipped,middle[::-1]))
+    # print(locs[0], locs[-1])
+
     vertices = []
     for entry in locs: 
         vertices.append([entry[0],entry[1], height])
-    return vertices
+    return vertices 
 
 def draw_curve(locs, ax, num_bits):
     # Draw

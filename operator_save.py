@@ -20,6 +20,10 @@ import subprocess
 import bmesh
 
 
+'''
+Below internal functinalities that calls python with subprocess，reinstall the plugin with what ever changes made
+'''
+
 class HilbertLayer : 
     layer_count = 0
     curves = []
@@ -209,25 +213,44 @@ def interpolate_obj(interpolator_path,  original_mesh_path, interpolated_mesh_pa
     assert (os.path.exists(interpolator_path), 'interpolator module missing')
     print('interpolator path' , interpolator_path )
     
-    subprocess.run(['python3', interpolator_path, '--mode=interpolate', '--resolution=' + str(reso), '--layer='+str(layers), 
-    '--Ipath='+original_mesh_path, '--Opath='+interpolated_mesh_path])
+    subprocess.run(['python3', interpolator_path, '--mode=interpolation', '--resolution=' + str(reso), '--layer='+str(layers),
+    '--Ipath='+ original_mesh_path, '--Opath='+interpolated_mesh_path])
     
 def store_hilbert_layers():
     bpy.context.scene['hilbert_layers'] = [hl.mesh.name for hl in HilbertLayer.curves]
 
+'''
+===Internal functionalities section ends===
+'''
 
 
+'''
+Below are the paths you can manipulate， reinstall the plugin with what ever changes made
+'''
 
 
+dir = "/Users/seanhuang/Grad/CS582/HilbertCurve/CS582Final/"
+morphed_mesh_path = dir + "morphed_cube.obj"
+control_mesh_path = dir +"control_cube.obj"
+interpolated_mesh_path = dir + "interpolated_cube.stl"
+hilbert_script_path = dir + "FinalProject.py"
 
+'''
+===Path section ends===
+'''
+
+
+'''
+Below are predefined ui sections for blender uis to control script arguments， reinstall the plugin with what ever changes made
+'''
 class SimpleUI_OT_SaveMorphedMesh(bpy.types.Operator):
     bl_idname = "simpleui.save_morphed_mesh"
     bl_label = "Save Morphed Mesh"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
-        dir = "/Users/seanhuang/Grad/CS582/HilbertCurve/CS582Final/"
-        morphed_mesh_path = dir + "morphed_cube.obj"
+        
+        
         print(mannually_save(morphed_mesh_path))
         
         return {'FINISHED'}
@@ -235,14 +258,16 @@ class SimpleUI_OT_SaveMorphedMesh(bpy.types.Operator):
 
 class SimpleUI_OT_PerformMainFunctionality(bpy.types.Operator):
     bl_idname = "simpleui.perform_main_functionality"
-    bl_label = "Perform Main Functionality"
+    bl_label = "Create Control Points"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
-        dir = "/Users/seanhuang/Grad/CS582/HilbertCurve/CS582Final/"
-        hilbert_script_path = dir + "FinalProject.py"
-        control_mesh_path = dir +"control_cube.obj"
-        create_control_mesh(hilbert_script_path, control_mesh_path,2,2)
+        
+       
+        bit = context.scene.hilbert_properties.bit
+        print('hilbert bit ', 2)
+        layer = context.scene.hilbert_properties.layer
+        create_control_mesh(hilbert_script_path, control_mesh_path,bit,layer)
 
         import_obj_stl(control_mesh_path, 'obj') 
 
@@ -250,20 +275,54 @@ class SimpleUI_OT_PerformMainFunctionality(bpy.types.Operator):
         
         return {'FINISHED'}
 
+class SimpleUI_OT_LoadInterpolatedMesh(bpy.types.Operator):
+    bl_idname = "simpleui.load_interpolated_mesh"
+    bl_label = "Interpolate Mesh"
+    bl_options = {'REGISTER', 'UNDO'}
 
-#def main(context):
+    def execute(self, context):
+        
+        reso = context.scene.hilbert_properties.reso
+        layer = context.scene.hilbert_properties.layer
+        print('interpolation reso',reso)
+        interpolate_obj(hilbert_script_path ,  morphed_mesh_path, interpolated_mesh_path, reso,layer )
+        import_obj_stl(interpolated_mesh_path, 'stl') 
+        
+        return {'FINISHED'}
+
+
+class CurveProperties(bpy.types.PropertyGroup):
+    layer : bpy.props.IntProperty(
+        name = "layer",
+        description = "hilbert curve layer",
+        default = 2,
+        min = 1,
+        max = 5
+        )
     
-    #.obj is mannually imported(order preserved)  wrapped, and stored in HilbertLayer class 
-    # currently there can only be 1 layer/obj in the scene  
+    bit : bpy.props.IntProperty(
+        name = "bit",
+        description = "hilbert curve order bit",
+        default = 2,
+        min = 1,
+        max = 10
+        )
 
-  
+    reso : bpy.props.IntProperty(
+        name = "reso",
+        description = "interpolation resolution",
+        default = 10,
+        min = 1,
+        max = 20
+        )
+
 
 class SimpleUI_PT_Panel(bpy.types.Panel):
-    bl_label = "HilbertUI"
+    bl_label = "Hilbert UI"
     bl_idname = "SIMPLEUI_PT_panel"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
-    bl_category = 'Simple UI'
+    bl_category = 'Hilbert UI'
 
     def draw(self, context):
         layout = self.layout
@@ -271,8 +330,14 @@ class SimpleUI_PT_Panel(bpy.types.Panel):
         # Add buttons
         layout.operator("simpleui.perform_main_functionality", text="Perform Main Functionality")
         layout.operator("simpleui.save_morphed_mesh", text="Save Morphed Mesh")
-
-
+        layout.operator("simpleui.load_interpolated_mesh", text="Load Interpolated Mesh")
+#        layout.prop("simpleui.bit_slider", text = "bits",slider=True)
+#        layout.prop("simpleui.reso_slider", text = "resolution",slider=True)
+        scene = context.scene
+        hilbert_properties = scene.hilbert_properties
+        layout.prop(hilbert_properties, "layer", slider=True)
+        layout.prop(hilbert_properties, "bit", slider=True)
+        layout.prop(hilbert_properties, "reso", slider=True)
 
 def menu_func(self, context):
     self.layout.operator(SimpleOperator.bl_idname, text=SimpleOperator.bl_label)
@@ -283,15 +348,27 @@ def register():
     bpy.utils.register_class(SimpleUI_PT_Panel)
     bpy.utils.register_class(SimpleUI_OT_SaveMorphedMesh)
     bpy.utils.register_class(SimpleUI_OT_PerformMainFunctionality)
+    bpy.utils.register_class(SimpleUI_OT_LoadInterpolatedMesh)
+#    bpy.utils.register_class(BitSlider)
+#    bpy.utils.register_class(ResolutionSlider)
+    bpy.utils.register_class(CurveProperties)
+    bpy.types.Scene.hilbert_properties = bpy.props.PointerProperty(type=CurveProperties)
 
 
 def unregister():
     bpy.utils.unregister_class(SimpleUI_PT_Panel)
     bpy.utils.unregister_class(SimpleUI_OT_SaveMorphedMesh)
     bpy.utils.unregister_class(SimpleUI_OT_PerformMainFunctionality)
+    bpy.utils.unregister_class(SimpleUI_OT_LoadInterpolatedMesh)
+#    bpy.utils.unregister_class(BitSlider)
+#    bpy.utils.unregister_class(ResolutionSlider)
+    del bpy.types.Scene.hilbert_properties
+    bpy.utils.unregister_class(CurveProperties)
 
 if __name__ == "__main__":
     register()
-
+'''
+===UI section ends===
+'''
     # test call
     #bpy.ops.object.simple_operator()
