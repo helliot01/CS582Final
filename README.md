@@ -3,7 +3,7 @@
 ## Usage:
 ### 1. Clone repository and use an editor to edit operator_save.py to change your working dircetory
 <p float="left">
-  <img src="Path.png" width="300" height="300"/> 
+  <img src="Path.png" width="350" height="300"/> 
 </p>
 
 
