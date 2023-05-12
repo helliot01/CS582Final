@@ -15,6 +15,16 @@ GRAD = ch.TCubicHermiteSpline.GRAD
 TRI_VERT = 3
 num_dims = 2
 
+# This script is the main file for both hilbert curve generation and interpolation
+# To use this file in terminal here are 2 sample command one of generation and one for interpolaiton
+# (make sure that  --layer are the same in both command)
+
+#python3 FinalProject.py --mode=create --order=2 --layer=2
+
+#python3 FinalProject.py --mode=interpolation --resolution=10 --layer=2 --Ipath=morphed_cube.obj
+
+# To show the output of this file while using blender,e.g. activate blender in MacOS :
+# /Applications/Blender.app/Contents/MacOS/Blender
 
 def parse_arg():
     parser = argparse.ArgumentParser(description='Train a detector')
@@ -94,6 +104,10 @@ def draw_curve(locs, ax, num_bits):
 def triangulation(slices, num_vertices):
     return [(i, i+1, i+num_vertices) for i in range(1, num_vertices * slices, num_vertices)]
 
+
+
+# function to generate and stack Hilbert curve Control points 
+# currently we only stack the same hilbert curve on other 
 def generate_basic_mesh(order : int,slices :int, path = 'control_cube.obj'):
         v0 = generate_curve(order,0) ##generate hilbert curves here for each slice
         vertices = np.asarray(v0)
@@ -124,6 +138,7 @@ def generate_basic_mesh(order : int,slices :int, path = 'control_cube.obj'):
         #        cube.vectors[i][j] = vertices[f[j],:]
         #cube.save(path)
 
+#function to interpolate layers of hilbert curve by creating a spline representation per layer
 def interpolate_basic_mesh(vertices, resolution, slices, path = 'interpolated_cube.stl'):
     int_vertices = np.zeros(shape=(resolution * vertices.shape[0],3))#solution
     num_vertices = int(vertices.shape[0] / slices) #number of vertices per layer before interpolation
@@ -153,6 +168,7 @@ def interpolate_basic_mesh(vertices, resolution, slices, path = 'interpolated_cu
             cube.vectors[i][j] = int_vertices[f[j],:]
     cube.save(path)
 
+# interpolation that for the time being only applicable in first 2 (x,y) directions
 def interpolate(chs_finite, vertex_time, spaced_time, vertices):
     v1_np = np.array(vertices)
     t_v1 = np.array([( t, X) for t, X in zip(vertex_time, v1_np) ],dtype= object)
